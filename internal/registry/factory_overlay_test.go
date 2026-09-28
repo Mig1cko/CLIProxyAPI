@@ -51,6 +51,14 @@ func TestFactoryOverlayKeepsSectionsApart(t *testing.T) {
 	if got := countModelID(data.Gemini, "shared-id"); got != 1 {
 		t.Fatalf("gemini section count = %d, want 1", got)
 	}
+	if got := countModelID(data.Claude, "shared-id"); got != 1 {
+		t.Fatalf("claude section count = %d, want 1 (overlay must not leak into other sections)", got)
+	}
+	for _, section := range catalogSections(data)[2:] {
+		if len(*section) != 0 {
+			t.Fatalf("overlay leaked into an unrelated section: %+v", *section)
+		}
+	}
 }
 
 func TestEmbeddedCatalogCarriesOverlayAfterLoad(t *testing.T) {
@@ -91,5 +99,36 @@ func TestRemoteRefreshKeepsOverlayModel(t *testing.T) {
 
 	if got := countModelID(GetClaudeModels(), "claude-sonnet-5-5"); got != 1 {
 		t.Fatalf("after remote refresh claude-sonnet-5-5 count = %d, want 1", got)
+	}
+}
+
+func TestRefreshWithUnchangedUpstreamReportsNoClaudeChange(t *testing.T) {
+	restoreCatalogAfter(t)
+	if err := loadModelsFromBytes(embeddedModelsJSON, "embed"); err != nil {
+		t.Fatalf("load embedded catalog: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(embeddedModelsJSON)
+	}))
+	defer server.Close()
+	previous := modelsURLs
+	modelsURLs = []string{server.URL}
+	defer func() { modelsURLs = previous }()
+
+	refreshCallbackMu.Lock()
+	previousCallback := refreshCallback
+	refreshCallbackMu.Unlock()
+	var changed []string
+	SetModelRefreshCallback(func(providers []string) { changed = append(changed, providers...) })
+	defer SetModelRefreshCallback(previousCallback)
+
+	// The overlay must be applied before change detection; otherwise every
+	// refresh would report claude as changed and re-register its models.
+	tryRefreshModels(context.Background(), "test refresh")
+
+	for _, provider := range changed {
+		if provider == "claude" {
+			t.Fatalf("unchanged upstream catalog reported claude as changed: %v", changed)
+		}
 	}
 }

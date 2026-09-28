@@ -64,8 +64,7 @@ func applyFactoryOverlay(data *staticModelsJSON, overlay *staticModelsJSON) {
 				continue
 			}
 			present[id] = struct{}{}
-			clone := *model
-			*target = append(*target, &clone)
+			*target = append(*target, cloneModelInfo(model))
 		}
 	}
 }
