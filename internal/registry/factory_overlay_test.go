@@ -61,16 +61,25 @@ func TestFactoryOverlayKeepsSectionsApart(t *testing.T) {
 	}
 }
 
+// factoryOverlayClaudeIDs are the models the factory build must serve even when the
+// remote catalog is unreachable: Sonnet 5.5 (claude-only layout) and Haiku 5.5, the
+// specialists' model since 2026-10-08.
+var factoryOverlayClaudeIDs = []string{"claude-sonnet-5-5", "claude-haiku-5-5"}
+
 func TestEmbeddedCatalogCarriesOverlayAfterLoad(t *testing.T) {
-	if factoryOverlay == nil || countModelID(factoryOverlay.Claude, "claude-sonnet-5-5") != 1 {
-		t.Fatalf("embedded factory overlay must declare claude-sonnet-5-5")
+	for _, id := range factoryOverlayClaudeIDs {
+		if factoryOverlay == nil || countModelID(factoryOverlay.Claude, id) != 1 {
+			t.Fatalf("embedded factory overlay must declare %s", id)
+		}
 	}
 	restoreCatalogAfter(t)
 	if err := loadModelsFromBytes(embeddedModelsJSON, "embed"); err != nil {
 		t.Fatalf("load embedded catalog: %v", err)
 	}
-	if got := countModelID(GetClaudeModels(), "claude-sonnet-5-5"); got != 1 {
-		t.Fatalf("claude catalog count for claude-sonnet-5-5 = %d, want 1", got)
+	for _, id := range factoryOverlayClaudeIDs {
+		if got := countModelID(GetClaudeModels(), id); got != 1 {
+			t.Fatalf("claude catalog count for %s = %d, want 1", id, got)
+		}
 	}
 }
 
@@ -97,8 +106,10 @@ func TestRemoteRefreshKeepsOverlayModel(t *testing.T) {
 
 	tryRefreshModels(context.Background(), "test refresh")
 
-	if got := countModelID(GetClaudeModels(), "claude-sonnet-5-5"); got != 1 {
-		t.Fatalf("after remote refresh claude-sonnet-5-5 count = %d, want 1", got)
+	for _, id := range factoryOverlayClaudeIDs {
+		if got := countModelID(GetClaudeModels(), id); got != 1 {
+			t.Fatalf("after remote refresh %s count = %d, want 1", id, got)
+		}
 	}
 }
 
