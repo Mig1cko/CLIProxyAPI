@@ -83,6 +83,27 @@ func TestEmbeddedCatalogCarriesOverlayAfterLoad(t *testing.T) {
 	}
 }
 
+// The overlay must carry the upstream entry, not a reduced copy: the Codex client's
+// model list reads native capabilities, so a missing web_search would read as unknown
+// on a proxy that started without the remote catalog (audit of factory.2, 2026-10-09).
+func TestEmbeddedOverlayKeepsNativeWebSearchCapability(t *testing.T) {
+	restoreCatalogAfter(t)
+	if err := loadModelsFromBytes(embeddedModelsJSON, "embed"); err != nil {
+		t.Fatalf("load embedded catalog: %v", err)
+	}
+	for _, id := range factoryOverlayClaudeIDs {
+		var found *ModelInfo
+		for _, model := range GetClaudeModels() {
+			if model != nil && model.ID == id {
+				found = model
+			}
+		}
+		if found == nil || found.NativeCapabilities == nil || found.NativeCapabilities.WebSearch == nil || !*found.NativeCapabilities.WebSearch {
+			t.Fatalf("%s must keep native web_search=true from the overlay", id)
+		}
+	}
+}
+
 func restoreCatalogAfter(t *testing.T) {
 	t.Helper()
 	saved := getModels()
